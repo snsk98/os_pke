@@ -15,8 +15,12 @@ void f3() { f4(); }
 void f2() { f3(); }
 void f1() { f2(); }
 
+void fff(int * a) { *a=1+2; }
+void ff() { int a=0; fff(&a); }
+
 int main(void) {
   printu("back trace the user app in the following:\n");
+  // ff();
   f1();
   exit(0);
   return 0;
