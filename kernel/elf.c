@@ -137,7 +137,7 @@ void load_bincode_from_host_elf(process *p) {
   // close the host spike file
   spike_file_close( info.f );
 
-  sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+  // sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
 }
 
 typedef struct {
