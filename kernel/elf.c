@@ -7,6 +7,7 @@
 #include "string.h"
 #include "riscv.h"
 #include "spike_interface/spike_utils.h"
+#include "stdlib.h"
 
 typedef struct elf_info_t {
   spike_file_t *f;
@@ -137,4 +138,127 @@ void load_bincode_from_host_elf(process *p) {
   spike_file_close( info.f );
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+typedef struct {
+    uint32 st_name;     /* Symbol name (string tbl index) */
+    uint8 st_info;  /* Symbol type and binding */
+    uint8 st_other; /* Symbol visibility */
+    uint16 st_shndx; /* Section index */
+    uint64 st_value;    /* Symbol value */
+    uint64 st_size;    /* Symbol size */
+} Elf64_Sym;
+
+void elf_print_backtrace(uint64 n,process * p){
+
+  arg_buf arg_bug_msg;
+
+  // retrieve command line arguements
+  size_t argc = parse_args(&arg_bug_msg);
+  if (!argc) panic("You need to specify the application program!\n");
+
+  // sprint("Application: %s\n", arg_bug_msg.argv[0]);
+
+  //elf loading. elf_ctx is defined in kernel/elf.h, used to track the loading process.
+  elf_ctx elfloader;
+  // elf_info is defined above, used to tie the elf file and its corresponding process.
+  elf_info info;
+
+  info.f = spike_file_open(arg_bug_msg.argv[0], O_RDONLY, 0);
+  info.p = p;
+  // IS_ERR_VALUE is a macro defined in spike_interface/spike_htif.h
+  if (IS_ERR_VALUE(info.f)) panic("Fail on openning the input application program.\n");
+
+  // init elfloader context. elf_init() is defined above.
+  if (elf_init(&elfloader, &info) != EL_OK)
+    panic("fail to init elfloader.\n");
+
+  // load elf. elf_load() is defined above.
+  if (elf_load(&elfloader) != EL_OK) panic("Fail on loading elf.\n");
+
+  //output shentsize
+  // sprint("shentsize: 0x%lx shstrndx:0x%lx shoff:0x%lx\n", elfloader.ehdr.shentsize,elfloader.ehdr.shstrndx,elfloader.ehdr.shoff);
+  
+  //read the shstrtab header entry
+  elf_sec_header shstrtab,symtab,strtab;
+  elf_fpread(&elfloader, (void *)&shstrtab, sizeof(shstrtab), elfloader.ehdr.shoff + elfloader.ehdr.shstrndx * elfloader.ehdr.shentsize);
+  // sprint("sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx \n",shstrtab.sh_name,shstrtab.sh_type,shstrtab.sh_offset,shstrtab.sh_size);
+
+  char buf[1000]={};
+  elf_fpread(&elfloader, (void *)buf, shstrtab.sh_size, shstrtab.sh_offset);
+
+  uint32 symtabndx=0,strtabndx=0;
+
+  for(int i=0,j=0;i<shstrtab.sh_size;i+=strlen(buf+i)+1,j++){
+    // sprint("%s\n",buf+i);
+  }
+
+  for(int i=0;i<elfloader.ehdr.shnum;i++){
+    elf_sec_header tmp;
+    elf_fpread(&elfloader, (void *)&tmp, sizeof(tmp), elfloader.ehdr.shoff + i * elfloader.ehdr.shentsize);
+    if(!strcmp(buf+tmp.sh_name,".symtab")){
+      symtabndx=i;
+      symtab=tmp;
+    }else if(!strcmp(buf+tmp.sh_name,".strtab")){
+      strtabndx=i;
+      strtab=tmp;
+    }
+  }
+
+  // sprint("%s sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx sh_entsize:%lx\n",buf+symtab.sh_name,symtab.sh_name,symtab.sh_type,symtab.sh_offset,symtab.sh_size,symtab.sh_entsize);
+  // sprint("%s sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx \n",buf+strtab.sh_name,strtab.sh_name,strtab.sh_type,strtab.sh_offset,strtab.sh_size);
+
+  char cuf[1000]={};
+  char duf[1000]={};
+  elf_fpread(&elfloader, (void *)cuf, symtab.sh_size, symtab.sh_offset);
+  elf_fpread(&elfloader, (void *)duf, strtab.sh_size, strtab.sh_offset);
+  
+  for(int i=0;i<strtab.sh_size;i+=strlen(duf+i)+1){
+    // sprint("%s\n",duf+i);
+  }
+
+  Elf64_Sym t[100];
+  int m=symtab.sh_size/symtab.sh_entsize;
+  
+  for(int i=0;i<m;i++){
+    Elf64_Sym tmp;
+    elf_fpread(&elfloader, (void *)&tmp, sizeof(tmp), symtab.sh_offset + i * symtab.sh_entsize);
+    // sprint("%s st_name:%lx st_value:%lx\n",duf+tmp.st_name,tmp.st_name,tmp.st_value);
+    t[i]=tmp;
+  }
+
+  trapframe* tf = current->trapframe;
+  uint64 ra,fp=*(uint64*)(tf->regs.s0-8);//初始化 fp为调用do_user_call的函数（lab1_challenge1中为print_backtrace）的栈底指针
+  
+  //回溯调用栈
+  do{
+    //first we get the ra 
+    ra = *(uint64*) (fp-8);
+
+    //print the info we need
+    // sprint("NO.%d: ra%lx\n",n,ra);
+
+    int minone=0x7fffffff;
+    int minndx=0;
+    for(int i=0;i<m;i++){
+      // if(t[i].st_value==0x81000000&&ra==0x8100000e) sprint("wocao1\n,i:%lx,ndx:%lx,min:%lx,%s\n",i,minndx,minone,duf+t[i].st_name);
+      if(t[i].st_value<=ra&&ra-t[i].st_value<=minone){
+        minone=ra-t[i].st_value;
+        minndx=i;
+      }
+    }
+    sprint("%s\n",duf+t[minndx].st_name);
+    if(!strcmp(duf+t[minndx].st_name,"main")) break;
+
+    //check. if the func is main func, we stop
+    if(0) break;
+
+    //update fp
+    fp = *(uint64*) (fp-16);
+
+  }while(--n);
+  
+  // close the host spike file
+  spike_file_close( info.f );
+
 }

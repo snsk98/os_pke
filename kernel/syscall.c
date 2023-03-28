@@ -10,6 +10,7 @@
 #include "string.h"
 #include "process.h"
 #include "util/functions.h"
+#include "elf.h"
 
 #include "spike_interface/spike_utils.h"
 
@@ -31,6 +32,8 @@ ssize_t sys_user_exit(uint64 code) {
   shutdown(code);
 }
 
+
+
 //
 // implement the SYS_user_backtrace syscall
 // lab1_challenge1
@@ -43,24 +46,9 @@ ssize_t sys_user_backtrace(uint64 n){
   //   sprint("%d: addr=%lx val=%lx\n",i,current->trapframe->regs.sp+i*8,*(uint64*)(current->trapframe->regs.sp+i*8));
   // }
 
-  trapframe* tf = current->trapframe;
-  uint64 ra,fp=*(uint64*)(tf->regs.s0-8);//初始化 fp为调用do_user_call的函数（lab1_challenge1中为print_backtrace）的栈底指针
-  
-  //回溯调用栈
-  do{
-    //first we get the ra 
-    ra = *(uint64*) (fp-8);
+  elf_print_backtrace(n,current);
 
-    //print the info we need
-    sprint("NO.%d: ra%lx\n",n,ra);
 
-    //check. if the func is main func, we stop
-    if(0) break;
-
-    //update fp
-    fp = *(uint64*) (fp-16);
-
-  }while(--n);
 
   return 0;
 }

@@ -12,6 +12,7 @@
 #include "process.h"
 #include "elf.h"
 #include "string.h"
+#include "elf.h"
 
 #include "spike_interface/spike_utils.h"
 
