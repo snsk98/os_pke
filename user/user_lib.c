@@ -53,7 +53,7 @@ int exit(int code) {
 
 int print_backtrace(int n){
   //todo lab1 challenge1
-	printu("backtrace is running......\n");
+	// printu("backtrace is running......\n");
 
   return do_user_call(SYS_user_backtrace,n,0,0,0,0,0,0);
 }
