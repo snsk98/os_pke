@@ -1,6 +1,7 @@
 #include "kernel/riscv.h"
 #include "kernel/process.h"
 #include "spike_interface/spike_utils.h"
+#include "kernel/elf.h"
 
 static void handle_instruction_access_fault() { panic("Instruction access fault!"); }
 
@@ -28,6 +29,9 @@ static void handle_timer() {
 // handle_mtrap calls a handling function according to the type of a machine mode interrupt (trap).
 //
 void handle_mtrap() {
+
+  elf_print_errorline(current);
+
   uint64 mcause = read_csr(mcause);
   switch (mcause) {
     case CAUSE_MTIMER:

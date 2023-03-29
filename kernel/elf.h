@@ -82,9 +82,23 @@ typedef struct elf_ctx_t {
   elf_header ehdr;
 } elf_ctx;
 
+typedef struct elf_sec_header_t {
+  uint32 sh_name; // index of the section name in the string table
+  uint32 sh_type; // type of the section
+  uint64 sh_flags;// flags of the section
+  uint64 sh_addr;// virtual address of the section
+  uint64 sh_offset;// offset of the section in the file
+  uint64 sh_size;// size of the section
+  uint32 sh_link;// index of the associated section
+  uint32 sh_info;// extra information
+  uint64 sh_addralign;// alignment of the section
+  uint64 sh_entsize;// size of the entries, if the section has table
+} elf_sec_header;
+
 elf_status elf_init(elf_ctx *ctx, void *info);
 elf_status elf_load(elf_ctx *ctx);
 
 void load_bincode_from_host_elf(process *p);
+void elf_print_errorline(process *p);
 
 #endif
