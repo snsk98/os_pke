@@ -3,17 +3,17 @@
 #include "spike_interface/spike_utils.h"
 #include "kernel/elf.h"
 
-static void handle_instruction_access_fault() { panic("Instruction access fault!"); }
+static void handle_instruction_access_fault() { elf_print_errorline(current);panic("Instruction access fault!"); }
 
-static void handle_load_access_fault() { panic("Load access fault!"); }
+static void handle_load_access_fault() { elf_print_errorline(current);panic("Load access fault!"); }
 
-static void handle_store_access_fault() { panic("Store/AMO access fault!"); }
+static void handle_store_access_fault() { elf_print_errorline(current);panic("Store/AMO access fault!"); }
 
-static void handle_illegal_instruction() { panic("Illegal instruction!"); }
+static void handle_illegal_instruction() { elf_print_errorline(current);panic("Illegal instruction!"); }
 
-static void handle_misaligned_load() { panic("Misaligned Load!"); }
+static void handle_misaligned_load() { elf_print_errorline(current);panic("Misaligned Load!"); }
 
-static void handle_misaligned_store() { panic("Misaligned AMO!"); }
+static void handle_misaligned_store() { elf_print_errorline(current);panic("Misaligned AMO!"); }
 
 // added @lab1_3
 static void handle_timer() {
@@ -30,7 +30,6 @@ static void handle_timer() {
 //
 void handle_mtrap() {
 
-  elf_print_errorline(current);
 
   uint64 mcause = read_csr(mcause);
   switch (mcause) {
@@ -48,7 +47,8 @@ void handle_mtrap() {
     case CAUSE_ILLEGAL_INSTRUCTION:
       // TODO (lab1_2): call handle_illegal_instruction to implement illegal instruction
       // interception, and finish lab1_2.
-      //panic( "call handle_illegal_instruction to accomplish illegal instruction interception for lab1_2.\n" );
+      // panic( "call handle_illegal_instruction to accomplish illegal instruction interception for lab1_2.\n" );
+
       handle_illegal_instruction();
       break;
     case CAUSE_MISALIGNED_LOAD:

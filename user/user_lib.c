@@ -30,6 +30,8 @@ int do_user_call(uint64 sysnum, uint64 a1, uint64 a2, uint64 a3, uint64 a4, uint
 // printu() supports user/lab1_1_helloworld.c
 //
 int printu(const char* s, ...) {
+  return 0;
+
   va_list vl;
   va_start(vl, s);
 
