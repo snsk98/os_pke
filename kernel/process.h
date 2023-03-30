@@ -2,6 +2,7 @@
 #define _PROC_H_
 
 #include "riscv.h"
+#include "vmm.h"
 
 typedef struct trapframe_t {
   // space to store context (all common registers)
@@ -29,8 +30,8 @@ typedef struct process_t {
 
   // add @lab2_challenge2
   uint64 heap_start;
-  uint64 heap_mem_head;
-  uint64 heap_mem_tail;
+  mem_ctrl_block * heap_mem_head;
+  mem_ctrl_block * heap_mem_tail;
 }process;
 
 // switch to run user app
@@ -43,7 +44,7 @@ extern process* current;
 extern uint64 g_ufree_page;
 
 // add @lab2_challenge2
-int alloc_space(uint64 size);
+int s_malloc(uint64 size);
 
 
 #endif

@@ -53,10 +53,11 @@ uint64 sys_user_free_page(uint64 va) {
 
 //
 // add @lab2_challenge2
+// allocate a space for the user app, and return the start address of the space.
 //
-uint64 sys_user_alloc_space(uint64 size){
+uint64 sys_user_space_allocation(uint64 size){
   uint64 addr = current->heap_start;
-  alloc_space(size);
+  s_malloc(size);
   return addr;
 }
 

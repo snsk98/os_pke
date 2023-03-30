@@ -206,13 +206,14 @@ uint64 user_vm_malloc_space(pagetable_t pagetable, uint64 head, uint64 tail)
   if(head > tail)
     return head;
 
-  // 对齐向上页面
+  // the page that head points to should be new page to avoid re-allcation 
   head = PAGE_UP_ALIGN(head);
+
   for(uint64 i = head; i < tail; i += PGSIZE)
   {
     // 分配新页面
-    char *new_page;
-    if((new_page = (char *)alloc_page()) == 0)
+    void *new_page;
+    if((new_page = alloc_page()) == 0)
       panic("failed to user_vm_malloc .\n");
     // 初始化新页面
     memset(new_page,0,sizeof(uint8) * PGSIZE);
@@ -222,65 +223,72 @@ uint64 user_vm_malloc_space(pagetable_t pagetable, uint64 head, uint64 tail)
   return tail;
 }
 
-int init_mem_pool = 0;
+int mem_pool_init_done = 0;
 
 // add @lab2_challenge2
-// 优先从内存池中获取申请的空间，若内存池中没有满足要求的，则从物理内存中创建内存块并放入进程的内存池中。
+// first try to get the space from the memory pool, if the memory pool does not have the space, then create a new memory block and put it into the memory pool.
 uint64 better_alloc_page(int size){
-  // 初始化内存池
-  if(init_mem_pool == 0){
+  // init the memory pool
+  if(mem_pool_init_done == 0){
     uint64 addr = current->heap_start = USER_FREE_ADDRESS_START;
-    alloc_space(sizeof(mem_ctrl_block));
+    s_malloc(sizeof(mem_ctrl_block));
     pte_t *pte = page_walk(current->pagetable, addr, 0);
     mem_ctrl_block *fst_ctrl_block = (mem_ctrl_block *) PTE2PA(*pte);
-    current->heap_mem_head = (uint64) fst_ctrl_block;
+    current->heap_mem_head = fst_ctrl_block;
+    current->heap_mem_tail = fst_ctrl_block;
     fst_ctrl_block->next = fst_ctrl_block;
     fst_ctrl_block->size = 0;
-    current->heap_mem_tail = (uint64)fst_ctrl_block;
-    init_mem_pool = 1;
+    fst_ctrl_block->available=0;//the first block is not available, just a dummy block
+    mem_pool_init_done = 1;
   }
 
-  mem_ctrl_block *head = (mem_ctrl_block *)current->heap_mem_head;
-  mem_ctrl_block *tail = (mem_ctrl_block *)current->heap_mem_tail;
+  mem_ctrl_block *head = current->heap_mem_head;
+  mem_ctrl_block *tail = current->heap_mem_tail;
   
-  //查找是否有可用的内存块
-  while (1){
+  //find a available block
+  do{
       if(head->size >= size && head->available){
           head->available = 0;
-          return head->offset + sizeof(mem_ctrl_block);
+          return head->offset + sizeof(mem_ctrl_block);//every block has a mem_ctrl_block object, so we need to add sizeof(mem_ctrl_block) to get the real offset
       }
-      if(head->next == tail) break;//?
       head = head->next;
-  }
-  // 没有可用的内存块
-  // 向内核申请在heap中增加sizeof(mem_ctrl_block) + size 个字节的大小，生成一个内存块并加入内存池中
+  } while(head->next != tail);
+
+  // no available block, then create a new block
+  // allocate sizeof(mem_ctrl_block)+size bytes in heap, and create a new memory block and put it into the memory pool
+
+
   uint64 alloc_addr = current->heap_start;
-  alloc_space((uint64)(sizeof(mem_ctrl_block) + size + 8));
   pte_t *pte = page_walk(current->pagetable, alloc_addr, 0);
   mem_ctrl_block *new = (mem_ctrl_block *)(PTE2PA(*pte) + (alloc_addr & 0xfff));
-  uint64 am = (8 - ((uint64)new % 8))%8;
-  new = (mem_ctrl_block *)((uint64)new + am);
+
+  //allocate space
+  s_malloc((uint64)(sizeof(mem_ctrl_block) + size +8));//add 8 bytes to make sure there are still enough space for the new block to be 8 bytes aligned(after new+=margin)
+  uint64 margin = (8 - ((uint64)new % 8))%8;
+  new = (mem_ctrl_block *)((uint64)new + margin);
 
   new->available = 0;
-  new->size = size;
-  new->offset = alloc_addr;
+  new->size = size;//size of the memory block
+  new->offset = alloc_addr;//real offset of the memory block, because new may get a margin to make it 8 bytes aligned
+
+  //insert the new block into the memory pool as the head
   new->next = head->next;
-  
   head->next = new;
-  head = (mem_ctrl_block *)current->heap_mem_head;
-//   current->heap_mem_tail = (uint64)now;
-  return alloc_addr + sizeof(mem_ctrl_block);
+
+  return alloc_addr + sizeof(mem_ctrl_block);//return the addr, ignore the margin caused by 8 bytes alignment
 }
 
 // add @lab2_challenge2
-//根据参数提供的虚拟地址，寻找到对应的物理地址，并找到其控制块，将该内存块放入进程的内存池中
+//according to the virtual address, find the physical address and the control block, and put the memory block into the memory pool of the process
 void better_free_page(void *addr){
   addr = (void *)((uint64)addr - sizeof(mem_ctrl_block));
   pte_t *pte = page_walk(current->pagetable, (uint64)(addr), 0);
-  mem_ctrl_block *old = (mem_ctrl_block *)(PTE2PA(*pte) + ((uint64)addr & 0xfff));
-  uint64 am = (8 - ((uint64)old % 8))%8;
-  old = (mem_ctrl_block *)((uint64)old + am);
-  if(old->available)
-      panic("in free function, the memory has been freed before! \n");
-  old->available = 1;
+  mem_ctrl_block *page_to_free = (mem_ctrl_block *)(PTE2PA(*pte) + ((uint64)addr & 0xfff));
+
+  //we get the page_to_free with addr's value, but addr may not be 8 bytes aligned, so we need to find the real mem_ctrl_block 
+  uint64 margin = (8 - ((uint64)page_to_free % 8))%8;
+  page_to_free = (mem_ctrl_block *)((uint64)page_to_free+margin);
+  if(page_to_free->available)
+      panic("[better_free_page]: availible block cannot be free! \n");
+  page_to_free->available = 1;//set the block to be available
 }

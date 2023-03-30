@@ -35,10 +35,10 @@ void user_vm_unmap(pagetable_t page_dir, uint64 va, uint64 size, int free);
 // add @lab2_challenge2
 // memory control block.
 typedef struct mem_ctrl_block_t{
-    int available;
-    int size;
-    uint64 offset;
-    struct mem_ctrl_block_t *next;
+    uint64 available;//1:available 0:unavailable
+    uint64 size;//size of the memory block
+    uint64 offset;//real offset of memory block
+    struct mem_ctrl_block_t *next;//next memory control block
 }mem_ctrl_block;
 
 
