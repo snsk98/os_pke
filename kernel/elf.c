@@ -290,14 +290,12 @@ void load_bincode_from_host_elf(process *p) {
 char buf[5000];
 
 void elf_print_errorline(process *p){
-  static int a =0;
+  
   arg_buf arg_bug_msg;
 
   // retrieve command line arguements
   size_t argc = parse_args(&arg_bug_msg);
   if (!argc) panic("You need to specify the application program!\n");
-
-  // sprint("Application: %s\n", arg_bug_msg.argv[0]);
 
   //elf loading. elf_ctx is defined in kernel/elf.h, used to track the loading process.
   elf_ctx elfloader;
@@ -317,79 +315,39 @@ void elf_print_errorline(process *p){
   // load elf. elf_load() is defined above.
   if (elf_load(&elfloader) != EL_OK) panic("4 Fail on loading elf.\n");
 
-  //output shentsize
-  // sprint("shentsize: 0x%lx shstrndx:0x%lx shoff:0x%lx\n", elfloader.ehdr.shentsize,elfloader.ehdr.shstrndx,elfloader.ehdr.shoff);
-  
+
   //read the shstrtab header entry
   elf_sec_header shstrtab,symtab,strtab,debug_line;
   elf_fpread(&elfloader, (void *)&shstrtab, sizeof(shstrtab), elfloader.ehdr.shoff + elfloader.ehdr.shstrndx * elfloader.ehdr.shentsize);
-  // sprint("sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx \n",shstrtab.sh_name,shstrtab.sh_type,shstrtab.sh_offset,shstrtab.sh_size);
 
-  //calculate total size of program segments
-  // uint64 prog_seg_end=0;
-  // for(int i=0,offset=elfloader.ehdr.phoff;i<elfloader.ehdr.phnum;i++,offset+=elfloader.ehdr.phentsize){
-  //   elf_prog_header tmp;
-  //   elf_fpread(&elfloader, (void *)&tmp, sizeof(tmp), offset);
-  //   sprint("no.%d p_type:0x%lx p_offset:0x%lx p_vaddr:0x%lx p_paddr:0x%lx p_filesz:0x%lx p_memsz:0x%lx p_flags:0x%lx p_align:0x%lx\n",i,tmp.type,tmp.off,tmp.vaddr,tmp.paddr,tmp.filesz,tmp.memsz,tmp.flags,tmp.align);
-  //   if(tmp.type==ELF_PROG_LOAD){
-  //     uint64 x = tmp.vaddr+tmp.memsz;
-  //     if(x>prog_seg_end) prog_seg_end=x;
-  //   }
-  // }
-  // sprint("prog_seg_end:0x%lx\n",prog_seg_end);
-
-
-
-  // char* buf=elf_alloc_mb(&elfloader,info.p->kstack-10000,info.p->kstack-10000,10000);
   elf_fpread(&elfloader, (void *)buf, shstrtab.sh_size, shstrtab.sh_offset);
 
-  uint32 symtabndx=0,strtabndx=0,debug_linendx=0;
+  uint32 debug_linendx=0;
 
-  // for(int i=0,j=0;i<shstrtab.sh_size;i+=strlen(buf+i)+1,j++){
-  //   sprint("%s\n",buf+i);
-  // }
 
   for(int i=0;i<elfloader.ehdr.shnum;i++){
     elf_sec_header tmp;
     elf_fpread(&elfloader, (void *)&tmp, sizeof(tmp), elfloader.ehdr.shoff + i * elfloader.ehdr.shentsize);
-    if(!strcmp(buf+tmp.sh_name,".symtab")){
-      symtabndx=i;
-      symtab=tmp;
-    }else if(!strcmp(buf+tmp.sh_name,".strtab")){
-      strtabndx=i;
-      strtab=tmp;
-    }else if(!strcmp(buf+tmp.sh_name,".debug_line")){
+    if(!strcmp(buf+tmp.sh_name,".debug_line")){
       debug_linendx=i;
       debug_line=tmp;
     }
   }
 
-  
-  // sprint("%s sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx sh_entsize:%lx\n",buf+debug_line.sh_name,debug_line.sh_name,debug_line.sh_type,debug_line.sh_offset,debug_line.sh_size,debug_line.sh_entsize);
 
   elf_fpread(&elfloader, (void *)buf, debug_line.sh_size, debug_line.sh_offset);
   
   make_addr_line(&elfloader,buf,debug_line.sh_size);
   spike_file_close( info.f );
-  // sprint("caonima\n");
+
 
   uint64 line_ind=info.p->line_ind;
-  // sprint("line_ind:%lx\n",info.p->line_ind);
-  // sprint("fuck %d file:%lx\n",a++,info.f);
-  // sprint("kstack:%lx kernel_sp:%lx kernel_trap:%lx epc:%lx\n",info.p->kstack,info.p->trapframe->kernel_sp,info.p->trapframe->kernel_trap,info.p->trapframe->epc);
-  
-  // close the host spike file
-
-  // sprint("hah epc:%lx mepc:%lx\n",info.p->trapframe->epc,read_csr(mepc));
-
-  // return;
-  // traverse
 
   char s[100];
   uint64 mepc = read_csr(mepc);
   addr_line al;
 
-  //todo 神奇的bug，运行几个循环后居然回到了函数开始的时候继续执行
+  //神奇的bug，运行几个循环后居然回到了函数开始的时候继续执行 结果是访问越界的原因 然后这个异常处理函数又是对所有异常都生效，所以就死循环了
   for(int i=0;i<info.p->line_ind;i++){
     if(info.p->line[i].addr<=mepc) continue;
 
