@@ -157,8 +157,6 @@ void elf_print_backtrace(uint64 n,process * p){
   size_t argc = parse_args(&arg_bug_msg);
   if (!argc) panic("You need to specify the application program!\n");
 
-  // sprint("Application: %s\n", arg_bug_msg.argv[0]);
-
   //elf loading. elf_ctx is defined in kernel/elf.h, used to track the loading process.
   elf_ctx elfloader;
   // elf_info is defined above, used to tie the elf file and its corresponding process.
@@ -175,14 +173,10 @@ void elf_print_backtrace(uint64 n,process * p){
 
   // load elf. elf_load() is defined above.
   if (elf_load(&elfloader) != EL_OK) panic("Fail on loading elf.\n");
-
-  //output shentsize
-  // sprint("shentsize: 0x%lx shstrndx:0x%lx shoff:0x%lx\n", elfloader.ehdr.shentsize,elfloader.ehdr.shstrndx,elfloader.ehdr.shoff);
   
   //read the shstrtab header entry
   elf_sec_header shstrtab,symtab,strtab;
   elf_fpread(&elfloader, (void *)&shstrtab, sizeof(shstrtab), elfloader.ehdr.shoff + elfloader.ehdr.shstrndx * elfloader.ehdr.shentsize);
-  // sprint("sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx \n",shstrtab.sh_name,shstrtab.sh_type,shstrtab.sh_offset,shstrtab.sh_size);
 
   char buf[1000]={};
   elf_fpread(&elfloader, (void *)buf, shstrtab.sh_size, shstrtab.sh_offset);
@@ -205,25 +199,15 @@ void elf_print_backtrace(uint64 n,process * p){
     }
   }
 
-  // sprint("%s sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx sh_entsize:%lx\n",buf+symtab.sh_name,symtab.sh_name,symtab.sh_type,symtab.sh_offset,symtab.sh_size,symtab.sh_entsize);
-  // sprint("%s sh_name:0x%lx sh_type:0x%lx sh_offset:0x%lx sh_size:0x%lx \n",buf+strtab.sh_name,strtab.sh_name,strtab.sh_type,strtab.sh_offset,strtab.sh_size);
-
-  char cuf[1000]={};
   char duf[1000]={};
-  elf_fpread(&elfloader, (void *)cuf, symtab.sh_size, symtab.sh_offset);
   elf_fpread(&elfloader, (void *)duf, strtab.sh_size, strtab.sh_offset);
   
-  for(int i=0;i<strtab.sh_size;i+=strlen(duf+i)+1){
-    // sprint("%s\n",duf+i);
-  }
-
   Elf64_Sym t[100];
   int m=symtab.sh_size/symtab.sh_entsize;
   
   for(int i=0;i<m;i++){
     Elf64_Sym tmp;
     elf_fpread(&elfloader, (void *)&tmp, sizeof(tmp), symtab.sh_offset + i * symtab.sh_entsize);
-    // sprint("%s st_name:%lx st_value:%lx\n",duf+tmp.st_name,tmp.st_name,tmp.st_value);
     t[i]=tmp;
   }
 
@@ -235,13 +219,9 @@ void elf_print_backtrace(uint64 n,process * p){
     //first we get the ra 
     ra = *(uint64*) (fp-8);
 
-    //print the info we need
-    // sprint("NO.%d: ra%lx\n",n,ra);
-
     int minone=0x7fffffff;
     int minndx=0;
     for(int i=0;i<m;i++){
-      // if(t[i].st_value==0x81000000&&ra==0x8100000e) sprint("wocao1\n,i:%lx,ndx:%lx,min:%lx,%s\n",i,minndx,minone,duf+t[i].st_name);
       if(t[i].st_value<=ra&&ra-t[i].st_value<=minone){
         minone=ra-t[i].st_value;
         minndx=i;
@@ -249,9 +229,6 @@ void elf_print_backtrace(uint64 n,process * p){
     }
     sprint("%s\n",duf+t[minndx].st_name);
     if(!strcmp(duf+t[minndx].st_name,"main")) break;
-
-    //check. if the func is main func, we stop
-    if(0) break;
 
     //update fp
     fp = *(uint64*) (fp-16);
